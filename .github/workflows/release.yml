@@ -1,0 +1,93 @@
+name: Update formula
+
+# Receives the `laplace-release` dispatch fired by laplace-cloud's
+# release-publish.yml after assets land on the public Laplace-Labs-inc/laplace
+# release, then regenerates Formula/laplace.rb from the published artifacts.
+on:
+  repository_dispatch:
+    types: [laplace-release]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag (e.g. v0.1.0-alpha-1-rc.2)
+        required: true
+      version:
+        description: Version without leading v
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Generate formula
+        env:
+          TAG: ${{ github.event.client_payload.tag || inputs.tag }}
+          VERSION: ${{ github.event.client_payload.version || inputs.version }}
+        run: |
+          set -euo pipefail
+          base="https://github.com/Laplace-Labs-inc/laplace/releases/download/${TAG}"
+
+          mac_arm="laplace-cli-aarch64-apple-darwin.tar.xz"
+          mac_x64="laplace-cli-x86_64-apple-darwin.tar.xz"
+          lin_arm="laplace-cli-aarch64-unknown-linux-musl.tar.xz"
+          lin_x64="laplace-cli-x86_64-unknown-linux-musl.tar.xz"
+
+          # Each asset has a sibling .sha256 file on the release.
+          sha() { curl -fsSL "${base}/$1.sha256" | awk '{print $1}'; }
+
+          mkdir -p Formula
+          cat > Formula/laplace.rb <<RUBY
+          class Laplace < Formula
+            desc "Deterministic concurrency verification CLI"
+            homepage "https://laplace-labs.com"
+            version "${VERSION}"
+            license "Elastic-2.0"
+
+            on_macos do
+              on_arm do
+                url "${base}/${mac_arm}"
+                sha256 "$(sha "${mac_arm}")"
+              end
+              on_intel do
+                url "${base}/${mac_x64}"
+                sha256 "$(sha "${mac_x64}")"
+              end
+            end
+
+            on_linux do
+              on_arm do
+                url "${base}/${lin_arm}"
+                sha256 "$(sha "${lin_arm}")"
+              end
+              on_intel do
+                url "${base}/${lin_x64}"
+                sha256 "$(sha "${lin_x64}")"
+              end
+            end
+
+            def install
+              bin.install "laplace"
+            end
+
+            test do
+              system "#{bin}/laplace", "--version"
+            end
+          end
+          RUBY
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ github.event.client_payload.version || inputs.version }}
+        run: |
+          set -euo pipefail
+          git config user.name "laplace-release-bot"
+          git config user.email "release-bot@laplace-labs.com"
+          git add Formula/laplace.rb
+          git diff --cached --quiet && { echo "no changes"; exit 0; }
+          git commit -m "laplace ${VERSION}"
+          git push
