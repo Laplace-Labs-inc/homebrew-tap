@@ -2,7 +2,7 @@ class Laplace < Formula
   desc "Deterministic concurrency verification CLI"
   homepage "https://laplace-labs.com"
   version "0.1.0-alpha-1-rc.4"
-  license "Elastic-2.0"
+  license "MIT"
 
   on_macos do
     on_arm do
