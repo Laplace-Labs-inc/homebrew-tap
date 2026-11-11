@@ -46,7 +46,7 @@ jobs:
             desc "Deterministic concurrency verification CLI"
             homepage "https://laplace-labs.com"
             version "${VERSION}"
-            license "Elastic-2.0"
+            license "MIT"
 
             on_macos do
               on_arm do
